@@ -2,6 +2,7 @@ import {defineConfig} from 'sanity'
 import {structureTool} from 'sanity/structure'
 import {visionTool} from '@sanity/vision'
 import {schemaTypes} from './schemaTypes'
+import {stitchChartTool} from './tools/stitchChart'
 
 export default defineConfig({
   name: 'default',
@@ -15,4 +16,6 @@ export default defineConfig({
   schema: {
     types: schemaTypes,
   },
+
+  tools: (prev) => [...prev, stitchChartTool],
 })
