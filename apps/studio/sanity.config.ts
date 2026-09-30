@@ -3,6 +3,7 @@ import {structureTool} from 'sanity/structure'
 import {visionTool} from '@sanity/vision'
 import {schemaTypes} from './schemaTypes'
 import {stitchChartTool} from './tools/stitchChart'
+import {ExportPdfAction, PATTERN_TYPES} from './pdf'
 
 export default defineConfig({
   name: 'default',
@@ -18,4 +19,9 @@ export default defineConfig({
   },
 
   tools: (prev) => [...prev, stitchChartTool],
+
+  document: {
+    actions: (prev, context) =>
+      PATTERN_TYPES.includes(context.schemaType) ? [...prev, ExportPdfAction] : prev,
+  },
 })

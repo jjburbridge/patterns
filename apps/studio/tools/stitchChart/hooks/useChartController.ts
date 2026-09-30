@@ -15,12 +15,11 @@ import {FREEHAND_KEY} from '../constants'
 import {
   cloneGrid,
   clampDim,
+  gridGeometry,
   gridHasContent,
   isBlank,
   LETTER_A_9x6,
   makeBlank,
-  pickCellSize,
-  pickLabelStride,
   PRESETS,
   resizeGrid,
   setGridCell,
@@ -99,11 +98,6 @@ export type ChartController = {
   applySection: (sectionKey: string) => void
   clearPattern: () => void
 }
-
-const GRID_PAD_TOP = 8
-const GRID_PAD_LEFT = 8
-const GRID_PAD_RIGHT = 24
-const GRID_PAD_BOTTOM = 22
 
 /**
  * @param baseStitch The stitch a freehand ring is drawn in before the user
@@ -349,13 +343,7 @@ export function useChartController(
   const paintedCount = paintedPerRow.reduce((sum, r) => sum + r.count, 0)
   const ringOverrideCount = Object.keys(ringOverrides).length
 
-  const cellSize = pickCellSize(width)
-  const gridInnerW = width * cellSize
-  const gridInnerH = height * cellSize
-  const gridSvgWidth = gridInnerW + GRID_PAD_LEFT + GRID_PAD_RIGHT
-  const gridSvgHeight = gridInnerH + GRID_PAD_TOP + GRID_PAD_BOTTOM
-  const colStride = pickLabelStride(width)
-  const rowStride = pickLabelStride(height)
+  const geom = gridGeometry(width, height)
 
   const ringGeom = useMemo(() => computeRingGeometry(ringRounds), [ringRounds])
 
@@ -371,8 +359,8 @@ export function useChartController(
       : `-${slugify(selectedPattern.title)}`
     : ''
 
-  const svgWidth = viewMode === 'ring' ? ringGeom.size : gridSvgWidth
-  const svgHeight = viewMode === 'ring' ? ringGeom.size : gridSvgHeight
+  const svgWidth = viewMode === 'ring' ? ringGeom.size : geom.svgWidth
+  const svgHeight = viewMode === 'ring' ? ringGeom.size : geom.svgHeight
 
   return {
     chartKey,
@@ -391,15 +379,15 @@ export function useChartController(
     ringRounds,
     ringEditable,
     ringSpec,
-    cellSize,
-    gridPadTop: GRID_PAD_TOP,
-    gridPadLeft: GRID_PAD_LEFT,
-    gridInnerW,
-    gridInnerH,
-    gridSvgWidth,
-    gridSvgHeight,
-    colStride,
-    rowStride,
+    cellSize: geom.cellSize,
+    gridPadTop: geom.padTop,
+    gridPadLeft: geom.padLeft,
+    gridInnerW: geom.innerW,
+    gridInnerH: geom.innerH,
+    gridSvgWidth: geom.svgWidth,
+    gridSvgHeight: geom.svgHeight,
+    colStride: geom.colStride,
+    rowStride: geom.rowStride,
     ringGeom,
     svgWidth,
     svgHeight,

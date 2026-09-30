@@ -59,6 +59,49 @@ export function pickLabelStride(dim: number): number {
   return 10
 }
 
+/** Space around the cells for the row and column numbers. */
+const PAD_TOP = 8
+const PAD_LEFT = 8
+const PAD_RIGHT = 24
+const PAD_BOTTOM = 22
+
+export type GridGeometry = {
+  cellSize: number
+  padTop: number
+  padLeft: number
+  innerW: number
+  innerH: number
+  svgWidth: number
+  svgHeight: number
+  colStride: number
+  rowStride: number
+}
+
+/**
+ * Everything `GridChartSvg` needs to draw a grid of a given size.
+ *
+ * The chart editor and the PDF export both draw the same grids, so the
+ * measurements live here rather than in whichever component happened to need
+ * them first — a chart that printed at different proportions than it was
+ * drawn at would be a quietly wrong pattern.
+ */
+export function gridGeometry(width: number, height: number): GridGeometry {
+  const cellSize = pickCellSize(width)
+  const innerW = width * cellSize
+  const innerH = height * cellSize
+  return {
+    cellSize,
+    padTop: PAD_TOP,
+    padLeft: PAD_LEFT,
+    innerW,
+    innerH,
+    svgWidth: innerW + PAD_LEFT + PAD_RIGHT,
+    svgHeight: innerH + PAD_TOP + PAD_BOTTOM,
+    colStride: pickLabelStride(width),
+    rowStride: pickLabelStride(height),
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Preset shapes
 //
