@@ -17,7 +17,10 @@ export const stitchCountEntry = defineType({
       name: 'value',
       type: 'number',
       title: 'Stitches',
-      validation: (rule) => rule.required().positive(),
+      // Grading scales this by a size's multiplier, and the result is rounded
+      // back to a whole stitch — so a fractional count here would only ever
+      // be an error that quietly disappeared.
+      validation: (rule) => rule.required().positive().integer(),
     }),
   ],
   preview: {

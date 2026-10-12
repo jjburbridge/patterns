@@ -21,7 +21,6 @@ export const PATTERN_PDF_QUERY = /* groq */ `
     terminology,
     notions,
     publishedAt,
-    "sizeLabels": sizes[].label,
     "heroImage": heroImage{
       crop,
       "url": asset->url,
@@ -31,6 +30,7 @@ export const PATTERN_PDF_QUERY = /* groq */ `
     "gauge": gauge{stitches, rows, swatchSize, stitchPattern},
     "sizes": sizes[]{
       label,
+      multiplier,
       "measurements": measurements[]{name, value, unit}
     },
     "needles": needles[]{
@@ -74,6 +74,7 @@ export const PATTERN_PDF_QUERY = /* groq */ `
         kind,
         label,
         repeatTimes,
+        useMultiplier,
         "counts": stitchCount[]{size, value},
         "chartUrl": chart.asset->url,
         "instruction": instruction[]{
@@ -91,7 +92,13 @@ export const PATTERN_PDF_QUERY = /* groq */ `
 `
 
 export type PdfMeasurement = {name: string | null; value: number | null; unit: string | null}
-export type PdfSize = {label: string | null; measurements: PdfMeasurement[] | null}
+
+export type PdfSize = {
+  label: string | null
+  /** Scaling factor a size-graded step multiplies its base count by. */
+  multiplier: number | null
+  measurements: PdfMeasurement[] | null
+}
 
 export type PdfGauge = {
   stitches: number | null
@@ -142,6 +149,8 @@ export type PdfStep = {
   kind: string | null
   label: string | null
   repeatTimes: number | null
+  /** When set, sizes without a count of their own are graded from one that has. */
+  useMultiplier: boolean | null
   counts: PdfCount[] | null
   chartUrl: string | null
   instruction: PdfGroup[] | null
@@ -164,7 +173,6 @@ export type PdfPattern = {
   terminology: string | null
   notions: string[] | null
   publishedAt: string | null
-  sizeLabels: (string | null)[] | null
   heroImage: PdfHeroImage | null
   gauge: PdfGauge | null
   sizes: PdfSize[] | null

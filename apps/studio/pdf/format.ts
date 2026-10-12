@@ -202,25 +202,183 @@ function formatGroup(group: PdfGroup | null): string {
   return stitches.length > 1 ? `(${body}) × ${times}` : `${body} × ${times}`
 }
 
+/** A stitch count that knows which size it belongs to. */
+type ResolvedCount = {label: string; value: number}
+
+type Resolution = {
+  counts: ResolvedCount[]
+  /** Every size the pattern declares has a count, in declared order. */
+  complete: boolean
+}
+
+/** A size's multiplier, defaulting to 1 — a zero or missing one grades nothing. */
+function multiplierOf(size: PdfSize): number {
+  return typeof size.multiplier === 'number' && size.multiplier > 0 ? size.multiplier : 1
+}
+
 /**
- * Stitch counts after a step, graded across sizes.
+ * One size's count scaled to another's.
  *
- * A single size prints as "12 sts". Several print in the order the pattern
- * declares its sizes rather than the order the counts happen to be stored
- * in, because a graded pattern is read as "S / M / L" throughout.
+ * Stitches are whole things and a round of none is not a round, so the result
+ * is rounded to the nearest and floored at one however small the multiplier.
+ *
+ * The nudge is for binary floating point: 53 × 1.2 ÷ 0.8 is exactly 79.5 but
+ * evaluates to 79.49999999999999, which would round down and lose a stitch on
+ * the sizes that land halfway. A relative epsilon is far larger than that
+ * error and far smaller than any fraction of a stitch worth keeping.
+ */
+function scaleCount(value: number, from: number, to: number): number {
+  const exact = (value * to) / from
+  return Math.max(1, Math.round(exact + exact * 1e-9))
+}
+
+/**
+ * The entered count the remaining sizes are graded from.
+ *
+ * The size whose multiplier is 1 is the one the pattern was written for, so
+ * it anchors the grading whenever it has a count of its own. Failing that the
+ * first entered count does, and scaling by the ratio of the two multipliers
+ * keeps the relationship the designer described either way.
+ */
+function pickAnchor(
+  graded: readonly (PdfSize & {label: string})[],
+  bySize: ReadonlyMap<string, number>,
+): {value: number; multiplier: number} | null {
+  const entered = graded
+    .filter((s) => bySize.has(s.label))
+    .map((s) => ({value: bySize.get(s.label)!, multiplier: multiplierOf(s)}))
+
+  if (entered.length === 0) return null
+  return entered.find((e) => e.multiplier === 1) ?? entered[0]
+}
+
+/**
+ * The stitch counts after a step, across every size the pattern grades to.
+ *
+ * A count is entered against one size. For a graded step the rest are worked
+ * out from it by each size's multiplier, so adding a size to the pattern
+ * grades the whole thing rather than leaving forty steps to retype. An
+ * entered count always wins over a derived one — the designer knowing better
+ * than the arithmetic is the whole reason the field stays editable.
+ *
+ * Counts come back in the order the pattern declares its sizes, because a
+ * graded pattern is read as "S / M / L" throughout.
+ */
+export function resolveCounts(step: PdfStep, sizes: readonly PdfSize[]): Resolution {
+  const graded = sizes.filter((s): s is PdfSize & {label: string} => Boolean(s?.label))
+
+  const entered = (step.counts ?? []).filter(
+    (c): c is PdfCount & {value: number} => typeof c?.value === 'number',
+  )
+  if (entered.length === 0) return {counts: [], complete: false}
+
+  // Nothing to grade against: the entries are all there is to say.
+  if (graded.length === 0) {
+    return {counts: entered.map((c) => ({label: c.size ?? '', value: c.value})), complete: true}
+  }
+
+  const bySize = new Map(entered.map((c) => [c.size ?? '', c.value]))
+  const matched = graded.filter((s) => bySize.has(s.label))
+
+  if (matched.length === graded.length) {
+    return {
+      counts: graded.map((s) => ({label: s.label, value: bySize.get(s.label)!})),
+      complete: true,
+    }
+  }
+
+  const anchor = step.useMultiplier ? pickAnchor(graded, bySize) : null
+  if (anchor) {
+    return {
+      counts: graded.map((s) => {
+        const own = bySize.get(s.label)
+        return {
+          label: s.label,
+          value: own ?? scaleCount(anchor.value, anchor.multiplier, multiplierOf(s)),
+        }
+      }),
+      complete: true,
+    }
+  }
+
+  // Ungraded and incomplete, or a count filed under a size the pattern no
+  // longer declares. Keeping the entries beats dropping the only number the
+  // step has, but the caller has to say which size each one is for, because
+  // position alone no longer tells the reader.
+  if (matched.length > 0) {
+    return {
+      counts: matched.map((s) => ({label: s.label, value: bySize.get(s.label)!})),
+      complete: false,
+    }
+  }
+  return {counts: entered.map((c) => ({label: c.size ?? '', value: c.value})), complete: false}
+}
+
+/**
+ * The stitch counts as they print in the margin.
+ *
+ * Sizes that all work out to the same number are said once: shaping usually
+ * diverges partway through, and "66 / 66 / 66 sts" is noise until it does.
+ * When a count is missing for some size, every number is tagged with the size
+ * it belongs to, so a partly graded step can't be misread as applying to all.
+ *
+ * `annotate` turns that tagging off for the case where the whole pattern is
+ * graded to one size and the front matter has already said so — see
+ * `soleCountSize`.
  */
 export function formatCounts(
-  counts: readonly PdfCount[] | null,
-  sizeLabels: readonly string[],
+  step: PdfStep,
+  sizes: readonly PdfSize[],
+  {annotate = true}: {annotate?: boolean} = {},
 ): string {
-  const entries = (counts ?? []).filter((c) => typeof c?.value === 'number')
-  if (entries.length === 0) return ''
-  if (entries.length === 1) return `${entries[0].value} sts`
+  const {counts, complete} = resolveCounts(step, sizes)
+  if (counts.length === 0) return ''
 
-  const bySize = new Map(entries.map((c) => [c.size ?? '', c.value]))
-  const ordered = sizeLabels.map((label) => bySize.get(label)).filter((v) => v != null)
-  const values = ordered.length === entries.length ? ordered : entries.map((c) => c.value)
-  return `${values.join(' / ')} sts`
+  const values = counts.map((c) => c.value)
+  const uniform = values.every((v) => v === values[0])
+
+  if (complete) return uniform ? `${values[0]} sts` : `${values.join(' / ')} sts`
+  if (uniform) {
+    const tag = annotate && counts[0].label ? ` (${counts[0].label})` : ''
+    return `${values[0]} sts${tag}`
+  }
+  // Mixed sizes are always tagged: position alone can't say which is which.
+  return `${counts.map(labelled).join(' / ')} sts`
+}
+
+/**
+ * The single size every stitch count in the pattern belongs to, if there is
+ * one, and the pattern grades to more than that.
+ *
+ * Sizes get added to a pattern long before the counts are graded for them —
+ * a designer declares S/M/L, then works through the steps. Until they do,
+ * every count names the one size it was written for, and tagging each of
+ * forty rows with the same "(Adult M)" is worse than saying it once up front.
+ */
+export function soleCountSize(pattern: PdfPattern): string | null {
+  const sizes = (pattern.sizes ?? []).filter((s) => s?.label)
+  if (sizes.length < 2) return null
+
+  let sole: string | null = null
+
+  for (const section of pattern.sections ?? []) {
+    for (const step of section?.steps ?? []) {
+      if (!step) continue
+      const {counts, complete} = resolveCounts(step, sizes)
+      if (counts.length === 0) continue
+      // Any fully graded step means the pattern is mixed, and a blanket
+      // statement in the front matter would be a lie.
+      if (complete || counts.length > 1 || !counts[0].label) return null
+      if (sole !== null && sole !== counts[0].label) return null
+      sole = counts[0].label
+    }
+  }
+
+  return sole
+}
+
+function labelled(c: ResolvedCount): string {
+  return c.label ? `${c.value} (${c.label})` : String(c.value)
 }
 
 /** A repeat step says how many times up front; everything else speaks for itself. */

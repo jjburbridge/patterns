@@ -23,10 +23,11 @@ import {
   formatSubtitle,
   formatYarn,
   patternTitle,
+  soleCountSize,
   splitStepLabel,
   stepIsEmpty,
 } from './format'
-import type {PdfPattern, PdfSection, PdfStep} from './patternQuery'
+import type {PdfPattern, PdfSection, PdfSize, PdfStep} from './patternQuery'
 
 /** A section's chart, already rasterised, keyed by the section it belongs to. */
 export type ChartImage = {
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
   stepStitches: {color: INK},
   stepProse: {marginBottom: 1},
   stepMuted: {color: MUTED, fontSize: 9},
-  stepCount: {width: 66, textAlign: 'right', color: MUTED},
+  stepCount: {textAlign: 'right', color: MUTED},
 
   notes: {color: MUTED, marginBottom: 10},
 
@@ -131,6 +132,7 @@ const styles = StyleSheet.create({
   sizeRow: {flexDirection: 'row', marginBottom: 2},
   sizeLabel: {fontFamily: 'Helvetica-Bold', width: 80},
   sizeDetail: {flex: 1, color: MUTED},
+  sizeNote: {color: MUTED, fontSize: 9, marginTop: 5},
 
   chartWrap: {marginTop: 6, marginBottom: 12, alignItems: 'center'},
   chartCaption: {fontSize: 8, color: MUTED, marginTop: 4},
@@ -153,6 +155,8 @@ export function PatternDocument({pattern, charts = {}, hero}: PatternDocumentPro
   const title = patternTitle(pattern)
   const subtitle = formatSubtitle(pattern)
   const sections = (pattern.sections ?? []).filter(hasContent)
+  // Stated once in the front matter, so the step rows don't have to repeat it.
+  const soleSize = soleCountSize(pattern)
 
   return (
     <Document title={title} author={pattern.designer ?? undefined}>
@@ -162,13 +166,14 @@ export function PatternDocument({pattern, charts = {}, hero}: PatternDocumentPro
         {hero && <HeroFigure hero={hero} />}
         {pattern.description && <Text style={styles.description}>{pattern.description}</Text>}
 
-        <FrontMatter pattern={pattern} />
+        <FrontMatter pattern={pattern} soleSize={soleSize} />
 
         {sections.map((section, i) => (
           <SectionBlock
             key={section.key ?? i}
             section={section}
-            sizeLabels={sizeLabelsOf(pattern)}
+            sizes={sizesOf(pattern)}
+            annotateCounts={soleSize === null}
             chart={section.key ? charts[section.key] : undefined}
           />
         ))}
@@ -209,7 +214,7 @@ function HeroFigure({hero}: {hero: HeroImage}) {
   )
 }
 
-function FrontMatter({pattern}: {pattern: PdfPattern}) {
+function FrontMatter({pattern, soleSize}: {pattern: PdfPattern; soleSize: string | null}) {
   const needles = pattern.needles ?? []
   const hooks = pattern.hooks ?? []
   const yarns = pattern.yarns ?? []
@@ -257,6 +262,15 @@ function FrontMatter({pattern}: {pattern: PdfPattern}) {
               </View>
             )
           })}
+          {/* Counts print as bare numbers, so the margin only reads once the
+              sizes they belong to have been named. */}
+          {sizes.length > 1 && (
+            <Text style={styles.sizeNote}>
+              {soleSize
+                ? `Stitch counts are given for ${soleSize} only.`
+                : `Stitch counts are given as ${sizes.map((s) => s.label).join(' / ')}.`}
+            </Text>
+          )}
         </Block>
       )}
 
@@ -299,11 +313,13 @@ function Bullet({children}: {children: React.ReactNode}) {
 
 function SectionBlock({
   section,
-  sizeLabels,
+  sizes,
+  annotateCounts,
   chart,
 }: {
   section: PdfSection
-  sizeLabels: string[]
+  sizes: PdfSize[]
+  annotateCounts: boolean
   chart?: ChartImage
 }) {
   const steps = (section.steps ?? []).filter((s) => s && !stepIsEmpty(s))
@@ -317,7 +333,13 @@ function SectionBlock({
       {section.notes && <Text style={styles.notes}>{section.notes}</Text>}
       {chart && <ChartFigure chart={chart} />}
       {steps.map((step, i) => (
-        <StepRow key={step._key ?? i} step={step} index={i + 1} sizeLabels={sizeLabels} />
+        <StepRow
+          key={step._key ?? i}
+          step={step}
+          index={i + 1}
+          sizes={sizes}
+          annotateCounts={annotateCounts}
+        />
       ))}
     </View>
   )
@@ -354,11 +376,21 @@ function ChartFigure({chart}: {chart: ChartImage}) {
  * sequence is only repeated under the prose when it adds something the
  * sentence doesn't already spell out.
  */
-function StepRow({step, index, sizeLabels}: {step: PdfStep; index: number; sizeLabels: string[]}) {
+function StepRow({
+  step,
+  index,
+  sizes,
+  annotateCounts,
+}: {
+  step: PdfStep
+  index: number
+  sizes: PdfSize[]
+  annotateCounts: boolean
+}) {
   const {designator, prose} = splitStepLabel(step, index)
   const stitches = formatInstruction(step.instruction)
   const repeat = formatRepeat(step)
-  const count = formatCounts(step.counts, sizeLabels)
+  const count = formatCounts(step, sizes, {annotate: annotateCounts})
   const showStitches = stitches !== '' && !prose.toLowerCase().includes(stitches.toLowerCase())
 
   return (
@@ -370,7 +402,11 @@ function StepRow({step, index, sizeLabels}: {step: PdfStep; index: number; sizeL
           <Text style={prose !== '' ? styles.stepMuted : styles.stepStitches}>{stitches}</Text>
         )}
       </View>
-      <Text style={styles.stepCount}>{count}</Text>
+      {/* With the size hoisted into the front matter every count is a single
+          bare number, so the wide graded column isn't needed. */}
+      <Text style={[styles.stepCount, {width: countWidth(annotateCounts ? sizes.length : 1)}]}>
+        {count}
+      </Text>
     </View>
   )
 }
@@ -382,6 +418,18 @@ function hasContent(section: PdfSection): boolean {
   return (section.steps ?? []).some((s) => s && !stepIsEmpty(s))
 }
 
-function sizeLabelsOf(pattern: PdfPattern): string[] {
-  return (pattern.sizeLabels ?? []).filter((l): l is string => typeof l === 'string')
+function sizesOf(pattern: PdfPattern): PdfSize[] {
+  return (pattern.sizes ?? []).filter((s) => s?.label)
+}
+
+/**
+ * How much margin to reserve for the stitch count, in points.
+ *
+ * A graded count is a run of numbers — "53 / 66 / 79 sts" — and wrapping it
+ * breaks the column the eye runs down to check its work. Each size past the
+ * first adds roughly " / nnn" at this size of Helvetica. Capped so that a
+ * heavily graded pattern doesn't starve the instructions beside it.
+ */
+function countWidth(sizeCount: number): number {
+  return Math.min(150, 66 + Math.max(0, sizeCount - 1) * 26)
 }

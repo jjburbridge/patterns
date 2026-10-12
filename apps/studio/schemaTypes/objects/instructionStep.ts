@@ -34,25 +34,19 @@ export const instructionStep = defineType({
     }),
     defineField({
       name: 'useMultiplier',
+      title: 'Grade by size multiplier',
       type: 'boolean',
       description:
-        'When on, the per-size stitch count is derived as baseCount × each size’s multiplier',
+        'When on, sizes with no count of their own are worked out from one that has, scaled by each size’s multiplier. Enter the count once, for the size the pattern is written for.',
       initialValue: false,
-    }),
-    defineField({
-      name: 'baseCount',
-      type: 'number',
-      description: 'Multiplied by each size’s multiplier to derive per-size counts',
-      validation: (rule) => rule.positive(),
-      hidden: ({parent}) => parent?.useMultiplier !== true,
     }),
     defineField({
       name: 'stitchCount',
       type: 'array',
       title: 'Stitch count per size',
-      description: 'Stitches at the end of this step, one entry per graded size',
+      description:
+        'Stitches at the end of this step. One entry per size, or a single entry for the rest to be graded from when the multiplier is on.',
       of: [defineArrayMember({type: 'stitchCountEntry'})],
-      hidden: ({parent}) => parent?.useMultiplier === true,
     }),
     defineField({
       name: 'repeatTimes',

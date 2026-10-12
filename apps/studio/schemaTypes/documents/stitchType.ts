@@ -6,9 +6,7 @@ export const stitchType = defineType({
   title: 'Stitch type',
   type: 'document',
   icon: SparklesIcon,
-  fieldsets: [
-    {name: 'chart', title: 'Chart', options: {collapsible: true, collapsed: false}},
-  ],
+  fieldsets: [{name: 'chart', title: 'Chart', options: {collapsible: true, collapsed: false}}],
   fields: [
     defineField({
       name: 'name',
