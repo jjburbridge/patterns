@@ -3,7 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      // The project id and dataset are baked into the bundle, so a build made
+      // against one must not be replayed for another. `env` covers values
+      // exported into the environment; `inputs` covers the ones the Sanity CLI
+      // reads out of .env files itself, which Turbo never sees.
+      "env": ["SANITY_STUDIO_*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"]
     },
     "dev": {
       "cache": false,

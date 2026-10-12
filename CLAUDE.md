@@ -26,9 +26,10 @@ No test script is configured.
 
 ## Studio architecture (`apps/studio/`)
 
-Three files define the studio's wiring:
+Four files define the studio's wiring:
 
-- `sanity.cli.ts` — CLI/deployment config. Hardcodes `projectId: g1bgv0t7`, `dataset: production`, and enables Studio auto-updates.
+- `env.ts` — the single place project/dataset/app ids are read. They come from `SANITY_STUDIO_`-prefixed environment variables, loaded by the Sanity CLI from `apps/studio/.env` and `.env.local`. Env files are gitignored; `apps/studio/.env.example` is the committed record of which variables exist, so a new one belongs there too. Never hardcode an id anywhere else, and keep reads as literal `process.env.SANITY_STUDIO_X` property accesses — the bundler substitutes them textually, so a dynamic lookup silently yields `undefined` in the browser. Any new variable must also be reachable by the `SANITY_STUDIO_*` wildcard in `turbo.json`'s `build.env`, or Turbo will serve a cached build made against a different project.
+- `sanity.cli.ts` — CLI/deployment config.
 - `sanity.config.ts` — runtime Studio config. Registers plugins (`structureTool`, `visionTool`) and pulls schema types from `./schemaTypes`.
 - `schemaTypes/index.ts` — the single export point (`schemaTypes` array) consumed by `sanity.config.ts`. New document/object types should be defined in their own files under `schemaTypes/` and added to this array.
 

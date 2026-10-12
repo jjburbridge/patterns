@@ -16,9 +16,11 @@ pnpm install
 pnpm dev
 ```
 
-Then <http://localhost:3333>. You are editing the hosted `production` dataset, so your changes are
-real as soon as you publish — but everything you type before that lives in a draft only you are
-looking at.
+Then <http://localhost:3333>. You are editing a hosted dataset — by default the live `production`
+one, so your changes are real as soon as you publish, though everything you type before that lives
+in a draft only you are looking at. To work somewhere safer, point `SANITY_STUDIO_DATASET` at
+another dataset in `apps/studio/.env`; see
+[Choosing a project and dataset](../README.md#choosing-a-project-and-dataset).
 
 The left-hand pane lists every document type. The **Stitch chart designer** sits in the top
 navigation bar alongside Structure and Vision, because it works across patterns rather than inside

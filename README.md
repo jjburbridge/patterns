@@ -20,11 +20,29 @@ up for you.
 
 ```sh
 pnpm install
+cp apps/studio/.env.example apps/studio/.env   # then fill it in, see below
 pnpm dev
 ```
 
-The Studio comes up on <http://localhost:3333>. It talks to the hosted `production` dataset on
-Sanity project `g1bgv0t7`, so you will be asked to log in and there is no local database to seed.
+The Studio comes up on <http://localhost:3333>. It talks to a hosted dataset, so you will be asked
+to log in and there is no local database to seed.
+
+### Choosing a project and dataset
+
+Which project and dataset the Studio uses comes from the environment, not from source, so a
+checkout can be pointed at a staging dataset or a second project without editing any code. Env
+files are gitignored; `apps/studio/.env.example` records what to set, and the values live on
+[sanity.io/manage](https://sanity.io/manage).
+
+| Variable                   | What it selects                                                  |
+| -------------------------- | ---------------------------------------------------------------- |
+| `SANITY_STUDIO_PROJECT_ID` | The Sanity project. Required.                                    |
+| `SANITY_STUDIO_DATASET`    | The dataset within it. Required.                                 |
+| `SANITY_STUDIO_APP_ID`     | Where `pnpm deploy` publishes. Only the deploy command needs it. |
+
+`.env.local` is loaded after `.env` and overrides it; variables exported into the shell beat both,
+which is the hook CI should use. The `SANITY_STUDIO_` prefix is required rather than stylistic — it
+is the only one the bundler substitutes into browser code.
 
 ## Commands
 
@@ -57,10 +75,11 @@ apps/studio/          Sanity Studio v6 — the only app
 turbo.json            Task pipeline
 ```
 
-Three files wire the Studio together:
+Four files wire the Studio together:
 
-- `sanity.cli.ts` — CLI and deployment config. Pins the project and dataset, and turns on Studio
-  auto-updates.
+- `env.ts` — reads the project, dataset, and app id out of the environment and fails loudly if a
+  required one is missing. Both configs below import from it.
+- `sanity.cli.ts` — CLI and deployment config.
 - `sanity.config.ts` — runtime config. Registers the plugins, the schema types, the stitch chart
   tool, and the PDF export document action.
 - `schemaTypes/index.ts` — the `schemaTypes` array the config consumes. A new type goes in its own
